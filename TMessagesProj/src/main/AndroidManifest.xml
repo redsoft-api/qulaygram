@@ -108,7 +108,7 @@
         android:backupAgent=".BackupAgent"
         android:hardwareAccelerated="@bool/useHardwareAcceleration"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/Qulay Gram"
+        android:label="@string/NagramX"
         android:largeHeap="true"
         android:theme="@style/Theme.TMessages.Start"
         android:manageSpaceActivity="org.telegram.ui.ExternalActionActivity"
