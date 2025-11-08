@@ -73,6 +73,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -7186,6 +7187,45 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     View feedbackView;
+    // Consent dialog state for data collection notice
+    private boolean dataCollectionConsentShown = false;
+    private int dataCollectionAgreeClicks = 0;
+
+    private void showDataCollectionConsentDialog() {
+        // Require 10 taps on "I agree" before dismissing
+        final int requiredClicks = 10;
+        dataCollectionAgreeClicks = 0;
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Notice");
+        String message = "A lot of data is being collected here.\n\nTap \"I agree\" 10 times to continue. Remaining: " + (requiredClicks - dataCollectionAgreeClicks);
+        builder.setMessage(message);
+        builder.setPositiveButton("I agree", (dialog, which) -> {
+            dataCollectionAgreeClicks++;
+            int remaining = requiredClicks - dataCollectionAgreeClicks;
+            if (remaining <= 0) {
+                dataCollectionConsentShown = true;
+                dialog.dismiss();
+            } else {
+                dialog.setMessage("A lot of data is being collected here.\n\nTap \"I agree\" 10 times to continue. Remaining: " + remaining);
+                View v = dialog.getButton(Dialog.BUTTON_POSITIVE);
+                if (v instanceof TextView) {
+                    ((TextView) v).setText("I agree");
+                }
+            }
+        });
+
+        AlertDialog alert = builder.create();
+        // Make dialog truly non-cancelable until the 10th tap
+        alert.setCancelable(false);
+        alert.setCanceledOnTouchOutside(false);
+        alert.setDismissDialogByButtons(false);
+
+        try {
+            alert.show();
+        } catch (Exception ignore) {
+        }
+    }
 
     @Override
     protected void onResume() {
@@ -7286,6 +7326,12 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         if (whenResumed != null) {
             whenResumed.run();
             whenResumed = null;
+        }
+
+        // Show the consent dialog upon entry, only once per activity lifetime,
+        // and only when passcode is not covering the UI.
+        if (!dataCollectionConsentShown && (passcodeDialog == null || passcodeDialog.passcodeView.getVisibility() != View.VISIBLE)) {
+            showDataCollectionConsentDialog();
         }
     }
 
