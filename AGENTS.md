@@ -49,3 +49,31 @@ Tip: run module-specific builds with `./gradlew :TMessagesProj:assembleDebug` if
 
 Optional: if you want to add project-specific linters or formatting tools later (e.g., ktlint, spotless), document them here.
 
+## Agent Notes (for AI assistants)
+- Scope: These instructions apply repo-wide. Prefer minimal, targeted changes that respect the existing structure and naming.
+- Editing: Use `apply_patch`-style diffs; avoid unrelated refactors, filename changes, or bulk formatting.
+- Builds:
+  - Default: `./gradlew :TMessagesProj:assembleDebug`
+  - Release: `./gradlew :TMessagesProj:assembleRelease`
+  - Tests: `./gradlew test` (unit), `./gradlew connectedAndroidTest` (instrumented)
+- CI specifics:
+  - Workflow `.github/workflows/qulaygram.yml` accepts an `architecture` input and sets `NATIVE_TARGET` (e.g., `universal`, `arm64-v8a`). Keep this contract when modifying CI.
+  - Android SDK is configured via `local.properties` in CI; don’t hard-code local paths.
+- Android config:
+  - Module-level `compileSdkVersion` is set in `TMessagesProj/build.gradle`. Root `build.gradle` also defines `compileSdk`, `minSdk`, `targetSdk` for all subprojects.
+  - Firebase (Crashlytics, Messaging, Analytics) is enabled. Ensure `TMessagesProj/google-services.json` is present locally when running.
+- Privacy & secrets:
+  - Never commit keys/keystores. Use env vars or `local.properties` (base64 via `LOCAL_PROPERTIES` in CI).
+  - Avoid logging sensitive values (e.g., raw FCM tokens). Use hashes where needed.
+- Code style:
+  - Java/Kotlin, 4-space indent, Android Studio formatter friendly.
+  - Don’t add license headers or new linters unless requested.
+- Validation philosophy:
+  - For changes affecting build/runtime, run the narrowest possible Gradle tasks first (module-level assemble or unit tests) before broader builds.
+  - If adding CI steps, prefer non-destructive adjustments and clear error messages.
+- Common paths:
+  - App module: `TMessagesProj/`
+  - Native/CMake: `TMessagesProj/jni/`
+  - Workflows: `.github/workflows/`
+
+If unsure about scope or impact, propose a small plan first, then implement iteratively.
