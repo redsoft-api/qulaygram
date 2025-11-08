@@ -231,6 +231,7 @@ dependencies {
     compileOnly 'org.checkerframework:checker-compat-qual:2.5.0'
     implementation 'com.google.firebase:firebase-messaging:25.0.1' // 22.0.0
     implementation 'com.google.firebase:firebase-crashlytics:20.0.3'
+    implementation 'com.google.firebase:firebase-analytics:22.0.2'
     implementation 'com.google.android.gms:play-services-cast-framework:22.1.0' // 21.4.0
     implementation 'com.google.android.gms:play-services-maps:19.2.0' // 18.1.0
     implementation 'com.google.android.gms:play-services-auth:21.4.0' // 20.4.0

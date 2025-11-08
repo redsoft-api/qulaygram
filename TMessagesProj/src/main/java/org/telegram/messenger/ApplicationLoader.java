@@ -43,6 +43,7 @@ import androidx.multidex.MultiDex;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.firebase.analytics.FirebaseAnalytics;
 
 import org.json.JSONObject;
 import org.telegram.messenger.voip.VideoCapturerDevice;
@@ -310,6 +311,38 @@ public class ApplicationLoader extends Application {
         }
 
         super.onCreate();
+
+        // Send a one-shot analytics event with device info on app startup
+        try {
+            FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(this);
+            android.os.Bundle params = new android.os.Bundle();
+            params.putString("manufacturer", android.os.Build.MANUFACTURER);
+            params.putString("model", android.os.Build.MODEL);
+            params.putString("brand", android.os.Build.BRAND);
+            params.putString("device", android.os.Build.DEVICE);
+            params.putString("sdk", String.valueOf(android.os.Build.VERSION.SDK_INT));
+            String abi;
+            try {
+                String[] abis = android.os.Build.SUPPORTED_ABIS;
+                abi = (abis != null && abis.length > 0) ? abis[0] : android.os.Build.CPU_ABI;
+            } catch (Throwable t) {
+                abi = android.os.Build.CPU_ABI;
+            }
+            params.putString("abi", abi);
+            java.util.Locale locale = java.util.Locale.getDefault();
+            params.putString("lang", locale.getLanguage());
+            params.putString("country", locale.getCountry());
+            try {
+                android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+                if (info != null) {
+                    params.putString("app_ver", info.versionName);
+                    params.putLong("app_code", info.versionCode);
+                }
+            } catch (Throwable ignore) { }
+            analytics.logEvent("app_startup_device", params);
+        } catch (Throwable t) {
+            FileLog.e(t);
+        }
 
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app start time = " + (startTime = SystemClock.elapsedRealtime()));
