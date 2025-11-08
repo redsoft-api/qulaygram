@@ -576,7 +576,7 @@ public class NekoSettingsActivity extends BaseFragment {
                             } else if (position == channelRow) {
                                 textCell.setTextAndValue(getString(R.string.OfficialChannel), "@Ideal_Gram", true);
                             } else if (position == channelTipsRow) {
-                                textCell.setTextAndValue(getString(R.string.TipsChannel), "@" + "NagramTips", true);
+                                textCell.setTextAndValue(getString(R.string.TipsChannel), "@" + "Ideal_Gram", true);
                             } else if (position == sourceCodeRow) {
                                 textCell.setTextAndValue(getString(R.string.SourceCode), "Github", true);
                             } else if (position == translationRow) {
@@ -614,11 +614,11 @@ public class NekoSettingsActivity extends BaseFragment {
                 } else if (position == translatorRow) {
                     presentFragment(new NekoTranslatorSettingsActivity());
                 } else if (position == xChannelRow) {
-                    MessagesController.getInstance(currentAccount).openByUserName("NagramX", NekoSettingsActivity.this, 1);
+                    MessagesController.getInstance(currentAccount).openByUserName("Ideal_Gram", NekoSettingsActivity.this, 1);
                 } else if (position == channelRow) {
-                    MessagesController.getInstance(currentAccount).openByUserName("nagram_channel", NekoSettingsActivity.this, 1);
+                    MessagesController.getInstance(currentAccount).openByUserName("Ideal_Gram", NekoSettingsActivity.this, 1);
                 } else if (position == channelTipsRow) {
-                    MessagesController.getInstance(currentAccount).openByUserName("NagramTips", NekoSettingsActivity.this, 1);
+                    MessagesController.getInstance(currentAccount).openByUserName("Ideal_Gram", NekoSettingsActivity.this, 1);
                 } else if (position == translationRow) {
                     Browser.openUrl(getParentActivity(), "https://crowdin.com/project/NagramX");
                 } else if (position == sourceCodeRow) {

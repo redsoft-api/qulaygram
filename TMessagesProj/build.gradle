@@ -61,6 +61,7 @@ tasks.configureEach {
 }
 
 android {
+    compileSdkVersion 36
     defaultConfig.applicationId = APP_PACKAGE
 
     packagingOptions {
