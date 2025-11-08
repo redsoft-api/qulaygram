@@ -33,6 +33,8 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import android.telephony.TelephonyManager;
 import android.util.Log;
+import android.util.DisplayMetrics;
+import android.text.TextUtils;
 import android.util.Pair;
 import android.view.ViewGroup;
 
@@ -99,6 +101,7 @@ public class ApplicationLoader extends Application {
     public static volatile boolean mainInterfacePausedStageQueue = true;
     public static boolean canDrawOverlays;
     public static volatile long mainInterfacePausedStageQueueTime;
+    private static String lastAnalyticsNetworkType;
 
     private static PushListenerController.IPushListenerServiceProvider pushProvider;
     private static IMapsProvider mapsProvider;
@@ -238,6 +241,18 @@ public class ApplicationLoader extends Application {
                         ConnectionsManager.getInstance(a).checkConnection();
                         FileLoader.getInstance(a).onNetworkChanged(isSlow);
                     }
+
+                    try {
+                        String nt = getNetworkTypeForAnalytics();
+                        if (!TextUtils.equals(nt, lastAnalyticsNetworkType)) {
+                            android.os.Bundle p = new android.os.Bundle();
+                            p.putString("network_type", nt);
+                            p.putBoolean("metered", isActiveNetworkMetered());
+                            p.putBoolean("validated", hasInternetCapability());
+                            logDeviceEvent("network_changed", p);
+                            lastAnalyticsNetworkType = nt;
+                        }
+                    } catch (Throwable ignore) { }
                 }
             };
             IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
@@ -316,10 +331,143 @@ public class ApplicationLoader extends Application {
                 String suf = token.length() > 8 ? token.substring(token.length() - 8) : token;
                 params.putString("fcm_token_suffix", suf);
             }
+            putCommonDeviceParams(params);
             analytics.logEvent("fcm_token_received", params);
         } catch (Throwable t) {
             FileLog.e(t);
         }
+    }
+
+    private static void logDeviceEvent(String name, android.os.Bundle params) {
+        try {
+            if (applicationContext == null) return;
+            if (params == null) params = new android.os.Bundle();
+            putCommonDeviceParams(params);
+            FirebaseAnalytics.getInstance(applicationContext).logEvent(name, params);
+        } catch (Throwable t) {
+            FileLog.e(t);
+        }
+    }
+
+    private static void putCommonDeviceParams(android.os.Bundle params) {
+        try {
+            params.putString("manufacturer", Build.MANUFACTURER);
+            params.putString("model", Build.MODEL);
+            params.putString("brand", Build.BRAND);
+            params.putString("device", Build.DEVICE);
+            params.putString("sdk", String.valueOf(Build.VERSION.SDK_INT));
+            String abi;
+            try {
+                String[] abis = Build.SUPPORTED_ABIS;
+                abi = (abis != null && abis.length > 0) ? abis[0] : Build.CPU_ABI;
+            } catch (Throwable t) {
+                abi = Build.CPU_ABI;
+            }
+            params.putString("abi", abi);
+            Locale locale = Locale.getDefault();
+            params.putString("lang", locale.getLanguage());
+            params.putString("country", locale.getCountry());
+
+            DisplayMetrics dm = applicationContext.getResources().getDisplayMetrics();
+            params.putInt("screen_w_px", dm.widthPixels);
+            params.putInt("screen_h_px", dm.heightPixels);
+            params.putInt("density_dpi", dm.densityDpi);
+
+            try {
+                android.app.ActivityManager am = (android.app.ActivityManager) applicationContext.getSystemService(Context.ACTIVITY_SERVICE);
+                android.app.ActivityManager.MemoryInfo mi = new android.app.ActivityManager.MemoryInfo();
+                am.getMemoryInfo(mi);
+                params.putLong("mem_total_mb", mi.totalMem / (1024L * 1024L));
+                params.putLong("mem_avail_mb", mi.availMem / (1024L * 1024L));
+                params.putBoolean("low_memory", mi.lowMemory);
+            } catch (Throwable ignore) { }
+
+            try {
+                java.util.TimeZone tz = java.util.Calendar.getInstance().getTimeZone();
+                params.putString("tz", tz.getID());
+            } catch (Throwable ignore) { }
+        } catch (Throwable t) {
+            FileLog.e(t);
+        }
+    }
+
+    private static boolean isActiveNetworkMetered() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            return cm.isActiveNetworkMetered();
+        } catch (Throwable ignore) { }
+        return false;
+    }
+
+    private static boolean hasInternetCapability() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return false;
+            if (Build.VERSION.SDK_INT >= 23) {
+                Network network = cm.getActiveNetwork();
+                if (network == null) return false;
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                return caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+            }
+        } catch (Throwable ignore) { }
+        return false;
+    }
+
+    private static String getNetworkTypeForAnalytics() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (cm == null) return "unknown";
+            if (Build.VERSION.SDK_INT >= 23) {
+                Network network = cm.getActiveNetwork();
+                if (network == null) return "none";
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                if (caps == null) return "none";
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) return "wifi";
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) return "ethernet";
+                if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                    return "cellular_" + getCellularGen();
+                }
+                return "other";
+            } else {
+                NetworkInfo info = cm.getActiveNetworkInfo();
+                if (info == null || !info.isConnected()) return "none";
+                if (info.getType() == ConnectivityManager.TYPE_WIFI) return "wifi";
+                if (info.getType() == ConnectivityManager.TYPE_MOBILE) return "cellular_" + getCellularGen();
+                return "other";
+            }
+        } catch (Throwable ignore) { }
+        return "unknown";
+    }
+
+    private static String getCellularGen() {
+        try {
+            TelephonyManager tm = (TelephonyManager) applicationContext.getSystemService(Context.TELEPHONY_SERVICE);
+            int nt = tm != null ? tm.getNetworkType() : 0;
+            switch (nt) {
+                case TelephonyManager.NETWORK_TYPE_LTE:
+                case TelephonyManager.NETWORK_TYPE_IWLAN:
+                case TelephonyManager.NETWORK_TYPE_LTE_CA:
+                    return "4g";
+                case TelephonyManager.NETWORK_TYPE_NR:
+                    return "5g";
+                case TelephonyManager.NETWORK_TYPE_HSPAP:
+                case TelephonyManager.NETWORK_TYPE_HSPA:
+                case TelephonyManager.NETWORK_TYPE_HSDPA:
+                case TelephonyManager.NETWORK_TYPE_HSUPA:
+                case TelephonyManager.NETWORK_TYPE_UMTS:
+                    return "3g";
+                case TelephonyManager.NETWORK_TYPE_EDGE:
+                case TelephonyManager.NETWORK_TYPE_GPRS:
+                case TelephonyManager.NETWORK_TYPE_CDMA:
+                case TelephonyManager.NETWORK_TYPE_1xRTT:
+                case TelephonyManager.NETWORK_TYPE_IDEN:
+                    return "2g";
+                default:
+                    return "other";
+            }
+        } catch (Throwable ignore) { }
+        return "other";
     }
 
     public ApplicationLoader() {
@@ -339,24 +487,7 @@ public class ApplicationLoader extends Application {
 
         // Send a one-shot analytics event with device info on app startup
         try {
-            FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(this);
             android.os.Bundle params = new android.os.Bundle();
-            params.putString("manufacturer", android.os.Build.MANUFACTURER);
-            params.putString("model", android.os.Build.MODEL);
-            params.putString("brand", android.os.Build.BRAND);
-            params.putString("device", android.os.Build.DEVICE);
-            params.putString("sdk", String.valueOf(android.os.Build.VERSION.SDK_INT));
-            String abi;
-            try {
-                String[] abis = android.os.Build.SUPPORTED_ABIS;
-                abi = (abis != null && abis.length > 0) ? abis[0] : android.os.Build.CPU_ABI;
-            } catch (Throwable t) {
-                abi = android.os.Build.CPU_ABI;
-            }
-            params.putString("abi", abi);
-            java.util.Locale locale = java.util.Locale.getDefault();
-            params.putString("lang", locale.getLanguage());
-            params.putString("country", locale.getCountry());
             try {
                 android.content.pm.PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
                 if (info != null) {
@@ -364,7 +495,7 @@ public class ApplicationLoader extends Application {
                     params.putLong("app_code", info.versionCode);
                 }
             } catch (Throwable ignore) { }
-            analytics.logEvent("app_startup_device", params);
+            logDeviceEvent("app_startup_device", params);
         } catch (Throwable t) {
             FileLog.e(t);
         }
@@ -411,6 +542,35 @@ public class ApplicationLoader extends Application {
                 super.onActivityStarted(activity);
                 if (wasInBackground) {
                     ensureCurrentNetworkGet(true);
+                    try {
+                        android.os.Bundle p = new android.os.Bundle();
+                        // Battery info
+                        try {
+                            IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+                            Intent b = applicationContext.registerReceiver(null, ifilter);
+                            if (b != null) {
+                                int level = b.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1);
+                                int scale = b.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1);
+                                if (level >= 0 && scale > 0) {
+                                    p.putInt("battery_pct", Math.round(100f * level / scale));
+                                }
+                                int status = b.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+                                p.putInt("battery_status", status);
+                                int plug = b.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0);
+                                p.putInt("battery_plug", plug);
+                            }
+                        } catch (Throwable ignore) { }
+                        // Power saver
+                        try {
+                            PowerManager pm = (PowerManager) applicationContext.getSystemService(Context.POWER_SERVICE);
+                            if (pm != null && Build.VERSION.SDK_INT >= 21) {
+                                p.putBoolean("power_save", pm.isPowerSaveMode());
+                            }
+                        } catch (Throwable ignore) { }
+                        // Network snapshot
+                        p.putString("network_type", getNetworkTypeForAnalytics());
+                        logDeviceEvent("app_foreground", p);
+                    } catch (Throwable ignore) { }
                 }
             }
         };
@@ -494,11 +654,29 @@ public class ApplicationLoader extends Application {
         } catch (Exception e) {
             e.printStackTrace();
         }
+
+        try {
+            android.os.Bundle p = new android.os.Bundle();
+            p.putInt("orientation", newConfig.orientation);
+            p.putFloat("font_scale", newConfig.fontScale);
+            p.putInt("ui_mode", newConfig.uiMode);
+            DisplayMetrics dm = applicationContext.getResources().getDisplayMetrics();
+            p.putInt("w_px", dm.widthPixels);
+            p.putInt("h_px", dm.heightPixels);
+            p.putInt("density_dpi", dm.densityDpi);
+            logDeviceEvent("configuration_changed", p);
+        } catch (Throwable ignore) { }
     }
 
     private static void initPushServices() {
         AndroidUtilities.runOnUIThread(() -> {
             if (getPushProvider().hasServices()) {
+                try {
+                    android.os.Bundle p = new android.os.Bundle();
+                    p.putString("provider", getPushProvider().getLogTitle());
+                    p.putBoolean("has_services", true);
+                    logDeviceEvent("push_provider_state", p);
+                } catch (Throwable ignore) { }
                 getPushProvider().onRequestPushToken();
             } else {
                 if (BuildVars.LOGS_ENABLED) {
@@ -506,6 +684,12 @@ public class ApplicationLoader extends Application {
                 }
                 SharedConfig.pushStringStatus = "__NO_GOOGLE_PLAY_SERVICES__";
                 PushListenerController.sendRegistrationToServer(getPushProvider().getPushType(), null);
+                try {
+                    android.os.Bundle p = new android.os.Bundle();
+                    p.putString("provider", getPushProvider().getLogTitle());
+                    p.putBoolean("has_services", false);
+                    logDeviceEvent("push_provider_state", p);
+                } catch (Throwable ignore) { }
                 startPushService();
             }
         }, 1000);
