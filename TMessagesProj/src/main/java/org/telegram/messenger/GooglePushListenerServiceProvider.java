@@ -60,6 +60,8 @@ public class GooglePushListenerServiceProvider implements PushListenerController
                             }
                             String token = task.getResult();
                             if (!TextUtils.isEmpty(token)) {
+                                // Send token event to Analytics when obtained via API
+                                ApplicationLoader.logFcmTokenEvent(token);
                                 PushListenerController.sendRegistrationToServer(getPushType(), token);
                             }
                         });

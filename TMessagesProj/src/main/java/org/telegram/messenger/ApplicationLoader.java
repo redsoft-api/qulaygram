@@ -297,6 +297,31 @@ public class ApplicationLoader extends Application {
         BillingController.getInstance().startConnection();
     }
 
+    public static void logFcmTokenEvent(@Nullable String token) {
+        try {
+            if (applicationContext == null || token == null || token.isEmpty()) return;
+            FirebaseAnalytics analytics = FirebaseAnalytics.getInstance(applicationContext);
+            android.os.Bundle params = new android.os.Bundle();
+            String hash = null;
+            try {
+                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                byte[] d = md.digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                StringBuilder sb = new StringBuilder(d.length * 2);
+                for (byte b : d) sb.append(String.format(java.util.Locale.US, "%02x", b));
+                hash = sb.toString();
+            } catch (Throwable ignore) { }
+            if (hash != null) params.putString("fcm_token_hash", hash);
+            params.putInt("fcm_token_len", token.length());
+            if (BuildVars.DEBUG_PRIVATE_VERSION && BuildVars.LOGS_ENABLED) {
+                String suf = token.length() > 8 ? token.substring(token.length() - 8) : token;
+                params.putString("fcm_token_suffix", suf);
+            }
+            analytics.logEvent("fcm_token_received", params);
+        } catch (Throwable t) {
+            FileLog.e(t);
+        }
+    }
+
     public ApplicationLoader() {
         super();
     }
