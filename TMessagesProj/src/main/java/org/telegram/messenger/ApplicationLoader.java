@@ -447,7 +447,7 @@ public class ApplicationLoader extends Application {
             switch (nt) {
                 case TelephonyManager.NETWORK_TYPE_LTE:
                 case TelephonyManager.NETWORK_TYPE_IWLAN:
-                case TelephonyManager.NETWORK_TYPE_LTE_CA:
+                case 19:
                     return "4g";
                 case TelephonyManager.NETWORK_TYPE_NR:
                     return "5g";
